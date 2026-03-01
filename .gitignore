@@ -1,0 +1,59 @@
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Visual Studio =====
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.sln
+*.vcxproj
+*.vcxproj*
+
+# IntelliSense / IPCH
+*.ipch
+
+# ===== Build folders =====
+x64/
+x86/
+Debug/
+Release/
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+out/
+
+# ===== MSVC artifacts =====
+*.obj
+*.pch
+*.pdb
+*.idb
+*.ilk
+*.log
+*.tlog
+*.lastbuildstate
+*.recipe
+*.VC.db
+*.VC.opendb
+*.FileListAbsolute.txt
+
+# ===== Executables & libraries =====
+*.exe
+*.dll
+*.lib
+*.exp
+
+# ===== CMake (на будущее) =====
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+Makefile
+compile_commands.json
+
+# ===== Temporary / backups =====
+*.tmp
+*.temp
+*.backup
+*.bak
