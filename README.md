@@ -77,22 +77,6 @@ Solution: `minetherouter.sln`
 
 Это необходимо, потому что TCP является потоковым протоколом и не сохраняет границы сообщений.
 
-
-## Message Types (Current)
-
-```cpp
-enum class MessageType : uint16_t {
-    UNDEFINED   = 0,
-    Ping        = 1,
-    Pong        = 2,
-    JoinRequest = 3,
-    JoinAccept  = 4,
-    JoinReject  = 5,
-    InputCmd    = 6,
-    WorldState  = 7,
-};```
-
-
 ## Networking (planned)
 
 - Network I/O переносится в отдельный поток с thread-safe очередями (incoming/outgoing)
