@@ -90,7 +90,7 @@ enum class MessageType : uint16_t {
     JoinReject  = 5,
     InputCmd    = 6,
     WorldState  = 7,
-};
+};```
 
 
 ## Networking (planned)
