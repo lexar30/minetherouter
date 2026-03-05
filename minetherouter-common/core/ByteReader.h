@@ -20,6 +20,17 @@ public:
 		return size - offset;
 	}
 
+	std::vector<uint8_t> readBytes(size_t bytesCount) {
+		std::vector<uint8_t> bytes;
+		bytes.reserve(bytesCount);
+		
+		for (int i = 0; i < bytesCount; i++) {
+			bytes.push_back(readU8());
+		}
+
+		return bytes;
+	}
+
 	uint8_t readU8() {
 		if (remaining() < 1 || data == nullptr) {
 			error = true;
