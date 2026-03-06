@@ -28,6 +28,7 @@ public:
 	void PushReceivedBytes(std::span<const uint8_t> bytes);
 	std::vector<uint8_t> ConsumeOutgoingBytes();
 
+	bool IsOpen() const { return _state == State::Open; }
 	void Close();
 
 private:

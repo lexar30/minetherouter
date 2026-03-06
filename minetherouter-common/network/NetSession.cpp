@@ -1,15 +1,13 @@
 #include "NetSession.h"
 #include "ProtocolContract.h"
 
-void NetSession::PushReceivedBytes(std::span<const uint8_t>  bytes)
+void NetSession::PushReceivedBytes(std::span<const uint8_t> bytes)
 {
-	const size_t size = bytes.size();
-	if (size == 0) {
+	if (bytes.empty()) {
 		return;
 	}
 
-	const bool isCorrectState = _state != State::ProtocolError && _state != State::Closed;
-	if (!isCorrectState) {
+	if (!IsOpen()) {
 		return;
 	}
 
@@ -27,18 +25,8 @@ std::vector<uint8_t> NetSession::ConsumeOutgoingBytes()
 
 bool NetSession::QueueOutgoingMessage(MessageType type, const std::vector<uint8_t>& payload)
 {
-	const bool isCorrectState = _state != State::ProtocolError && _state != State::Closed;
-	if (!isCorrectState) {
-		return false;
-	}
-
-	const bool isCorrectMsgType = type > MessageType::Undefined && type < MessageType::LAST;
-	if (!isCorrectMsgType) {
-		return false;
-	}
-
-	const bool isCorrectPayloadSize = payload.size() <= ProtocolContract::MAX_PAYLOAD_SIZE;
-	if (!isCorrectPayloadSize) {
+	// Invalid outgoing message does not change session state and is rejected by returning false.
+	if (!IsOpen()) {
 		return false;
 	}
 
@@ -48,7 +36,7 @@ bool NetSession::QueueOutgoingMessage(MessageType type, const std::vector<uint8_
 		return false;
 	}
 
-	_outgoingBytes.insert(_outgoingBytes.end(), bytesOut.data(), bytesOut.data() + bytesOut.size());
+	_outgoingBytes.insert(_outgoingBytes.end(), bytesOut.begin(), bytesOut.end());
 	return true;
 }
 
@@ -65,6 +53,8 @@ bool NetSession::TryDequeueIncomingMessage(Message& outMessage)
 
 void NetSession::TryExtractIncomingMessages()
 {
+	// Invalid incoming data puts session into ProtocolError.
+	// Incomplete data is kept until more bytes arrive.
 	ProtocolStatus protocolStatus = ProtocolStatus::Undefined;
 
 	do {
