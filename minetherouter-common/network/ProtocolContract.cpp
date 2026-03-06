@@ -1,13 +1,11 @@
-﻿#include <core/ByteWriter.h>
-
-#include "ProtocolContract.h"
-#include "MessageType.h"
-#include "core/ByteReader.h"
-#include "core/ByteWriter.h"
+﻿#include <network/ProtocolContract.h>
+#include <network/MessageType.h>
+#include <network/ByteReader.h>
+#include <network/ByteWriter.h>
 
 ProtocolStatus ProtocolContract::SerializeMessage(std::vector<uint8_t>& bytesOut, MessageType messageType, const std::vector<uint8_t>& payload)
 {
-	messageOut.clear();
+	bytesOut.clear();
 
 	if(payload.size() > MAX_PAYLOAD_SIZE) {
 		return ProtocolStatus::TooLarge;
@@ -15,7 +13,7 @@ ProtocolStatus ProtocolContract::SerializeMessage(std::vector<uint8_t>& bytesOut
 
 	ByteWriter byteWriter;
 
-	messageOut.reserve(HEADER_SIZE + payload.size());
+	bytesOut.reserve(HEADER_SIZE + payload.size());
 
 	byteWriter.writeU16(static_cast<uint16_t>(messageType));
 
@@ -23,7 +21,7 @@ ProtocolStatus ProtocolContract::SerializeMessage(std::vector<uint8_t>& bytesOut
 	byteWriter.writeU32(payloadSize);
 	byteWriter.writeBytes(payload.data(), payload.size());
 
-	messageOut.insert(messageOut.end(), byteWriter.data(), byteWriter.data() + byteWriter.size());
+	bytesOut.insert(bytesOut.end(), byteWriter.data(), byteWriter.data() + byteWriter.size());
 
 	return ProtocolStatus::Success;
 }

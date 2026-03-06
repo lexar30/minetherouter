@@ -13,9 +13,9 @@ enum class ProtocolStatus {
 	LAST = 5,
 };
 
-enum class MessageType;
+enum class MessageType : uint16_t;
 
-static class ProtocolContract
+class ProtocolContract
 {
 public:
 	static constexpr uint8_t PROTOCOL_VERSION = 1;

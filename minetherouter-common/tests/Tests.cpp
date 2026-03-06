@@ -4,10 +4,15 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "Tests.h"
-#include <core/ByteReader.h>
-#include <core/ByteWriter.h>
+#include <network/ByteReader.h>
+#include <network/ByteWriter.h>
+#include <network/NetSession.h>
+#include <network/ProtocolContract.h>
+#include <network/Message.h>
+#include <network/MessageType.h>
 
 namespace Tests {
 
@@ -152,8 +157,298 @@ namespace Tests {
             ASSERT_EQ(w.hasError(), false);
             ASSERT_EQ(w.size(), static_cast<size_t>(0));
         }
-	} // namespace ByteReaderWriter
+    } // namespace ByteReaderWriter
 
+
+    namespace NetSessionTests {
+
+        static std::vector<uint8_t> MakePayload(std::initializer_list<uint8_t> bytes) {
+            return std::vector<uint8_t>(bytes);
+        }
+
+        void QueueOutgoingMessage_BasicAndConsume() {
+            NetSession session;
+
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+
+            const std::vector<uint8_t> payload = MakePayload({ 0x10, 0x20, 0x30 });
+            const bool queued = session.QueueOutgoingMessage(MessageType::Ping, payload);
+            ASSERT_EQ(queued, true);
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+
+            std::vector<uint8_t> bytes = session.ConsumeOutgoingBytes();
+            ASSERT_EQ(bytes.empty(), false);
+
+            // After consume buffer should be empty.
+            std::vector<uint8_t> bytes2 = session.ConsumeOutgoingBytes();
+            ASSERT_EQ(bytes2.empty(), true);
+
+            // Validate produced bytes through ProtocolContract.
+            MessageType outType = MessageType::Undefined;
+            std::vector<uint8_t> outPayload;
+            size_t readBytesCount = 0;
+
+            const ProtocolStatus status = ProtocolContract::TryDeserializeMessage(
+                bytes,
+                outType,
+                outPayload,
+                readBytesCount
+            );
+
+            ASSERT_EQ(status, ProtocolStatus::Success);
+            ASSERT_EQ(outType, MessageType::Ping);
+            ASSERT_EQ(outPayload.size(), payload.size());
+            ASSERT_EQ(outPayload == payload, true);
+            ASSERT_EQ(readBytesCount, bytes.size());
+        }
+
+        void PushReceivedBytes_FullMessage_ProducesIncomingMessage() {
+            NetSession session;
+
+            const std::vector<uint8_t> payload = MakePayload({ 0xAA, 0xBB, 0xCC });
+            std::vector<uint8_t> bytes;
+
+            const ProtocolStatus serializeStatus =
+                ProtocolContract::SerializeMessage(bytes, MessageType::Pong, payload);
+            ASSERT_EQ(serializeStatus, ProtocolStatus::Success);
+            ASSERT_EQ(bytes.empty(), false);
+
+            session.PushReceivedBytes(bytes);
+
+            Message msg;
+            const bool hasMessage = session.TryDequeueIncomingMessage(msg);
+            ASSERT_EQ(hasMessage, true);
+            ASSERT_EQ(msg.type, MessageType::Pong);
+            ASSERT_EQ(msg.payload == payload, true);
+
+            Message msg2;
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg2), false);
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+        }
+
+        void PushReceivedBytes_PartialMessage_WaitsUntilEnoughBytes() {
+            NetSession session;
+
+            const std::vector<uint8_t> payload = MakePayload({ 0x01, 0x02, 0x03, 0x04, 0x05 });
+            std::vector<uint8_t> bytes;
+
+            const ProtocolStatus serializeStatus =
+                ProtocolContract::SerializeMessage(bytes, MessageType::Ping, payload);
+            ASSERT_EQ(serializeStatus, ProtocolStatus::Success);
+            ASSERT_EQ(bytes.size() > 2, true);
+
+            // Feed first part only.
+            const size_t split = bytes.size() / 2;
+            std::vector<uint8_t> first(bytes.begin(), bytes.begin() + split);
+            std::vector<uint8_t> second(bytes.begin() + split, bytes.end());
+
+            session.PushReceivedBytes(first);
+
+            Message msg;
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg), false);
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+
+            // Feed remaining part.
+            session.PushReceivedBytes(second);
+
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg), true);
+            ASSERT_EQ(msg.type, MessageType::Ping);
+            ASSERT_EQ(msg.payload == payload, true);
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+        }
+
+        void PushReceivedBytes_TwoMessagesInSingleBuffer_DequeuesBothInOrder() {
+            NetSession session;
+
+            std::vector<uint8_t> bytes1;
+            std::vector<uint8_t> bytes2;
+
+            const std::vector<uint8_t> payload1 = MakePayload({ 0x11, 0x22 });
+            const std::vector<uint8_t> payload2 = MakePayload({ 0x33, 0x44, 0x55 });
+
+            ASSERT_EQ(
+                ProtocolContract::SerializeMessage(bytes1, MessageType::Ping, payload1),
+                ProtocolStatus::Success
+            );
+            ASSERT_EQ(
+                ProtocolContract::SerializeMessage(bytes2, MessageType::Pong, payload2),
+                ProtocolStatus::Success
+            );
+
+            std::vector<uint8_t> allBytes;
+            allBytes.insert(allBytes.end(), bytes1.begin(), bytes1.end());
+            allBytes.insert(allBytes.end(), bytes2.begin(), bytes2.end());
+
+            session.PushReceivedBytes(allBytes);
+
+            Message msg1;
+            Message msg2;
+
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg1), true);
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg2), true);
+
+            ASSERT_EQ(msg1.type, MessageType::Ping);
+            ASSERT_EQ(msg1.payload == payload1, true);
+
+            ASSERT_EQ(msg2.type, MessageType::Pong);
+            ASSERT_EQ(msg2.payload == payload2, true);
+
+            Message msg3;
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg3), false);
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+        }
+
+        void PushReceivedBytes_PartialValidMessage_DoesNotSetProtocolError() {
+            NetSession session;
+
+            std::vector<uint8_t> fullBytes;
+            std::vector<uint8_t> payload = { 0xAA, 0xBB, 0xCC };
+
+            const ProtocolStatus serializeStatus =
+                ProtocolContract::SerializeMessage(fullBytes, MessageType::Ping, payload);
+            ASSERT_EQ(static_cast<int>(serializeStatus), static_cast<int>(ProtocolStatus::Success));
+
+            ASSERT_EQ(fullBytes.size() > 1, true);
+
+            const size_t split = fullBytes.size() / 2;
+            std::vector<uint8_t> firstPart(fullBytes.begin(), fullBytes.begin() + split);
+
+            session.PushReceivedBytes(firstPart);
+
+            ASSERT_EQ(static_cast<int>(session.GetState()), static_cast<int>(NetSession::State::Open));
+
+            Message msg;
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg), false);
+        }
+
+        void PushReceivedBytes_InvalidBytes_SetsProtocolError() {
+            NetSession session;
+
+            std::vector<uint8_t> broken = {
+                0xFF, 0xFF,
+                0x01, 0x00, 0x00, 0x00,
+            };
+
+            session.PushReceivedBytes(broken);
+
+            ASSERT_EQ(static_cast<int>(session.GetState()), static_cast<int>(NetSession::State::ProtocolError));
+
+            Message msg;
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg), false);
+        }
+
+        void QueueOutgoingMessage_InvalidType_ReturnsFalse_AndKeepsSessionOpen() {
+            NetSession session;
+
+            const bool queued = session.QueueOutgoingMessage(
+                MessageType::Undefined,
+                MakePayload({ 0x01 })
+            );
+
+            ASSERT_EQ(queued, false);
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+
+            std::vector<uint8_t> bytes = session.ConsumeOutgoingBytes();
+            ASSERT_EQ(bytes.empty(), true);
+        }
+
+        void QueueOutgoingMessage_TooLargePayload_ReturnsFalse_AndKeepsSessionOpen() {
+            NetSession session;
+
+            std::vector<uint8_t> payload(ProtocolContract::MAX_PAYLOAD_SIZE + 1, 0x7F);
+
+            const bool queued = session.QueueOutgoingMessage(MessageType::Ping, payload);
+            ASSERT_EQ(queued, false);
+            ASSERT_EQ(session.GetState(), NetSession::State::Open);
+
+            std::vector<uint8_t> bytes = session.ConsumeOutgoingBytes();
+            ASSERT_EQ(bytes.empty(), true);
+        }
+
+        void ProtocolError_BlocksFurtherUsage() {
+            NetSession session;
+
+            // Force protocol error through invalid incoming bytes.
+            std::vector<uint8_t> broken = {
+                0xFF, 0xFF,
+                0x01, 0x00, 0x00, 0x00
+            };
+
+            session.PushReceivedBytes(broken);
+
+            ASSERT_EQ(session.GetState(), NetSession::State::ProtocolError);
+
+            // Further outgoing enqueue should fail.
+            ASSERT_EQ(
+                session.QueueOutgoingMessage(MessageType::Ping, MakePayload({ 0x01 })),
+                false
+            );
+
+            // Pushing valid bytes should do nothing in ProtocolError state.
+            std::vector<uint8_t> validBytes;
+            ASSERT_EQ(
+                ProtocolContract::SerializeMessage(
+                    validBytes,
+                    MessageType::Ping,
+                    MakePayload({ 0xAA })
+                ),
+                ProtocolStatus::Success
+            );
+
+            session.PushReceivedBytes(validBytes);
+
+            Message msg;
+            ASSERT_EQ(session.TryDequeueIncomingMessage(msg), false);
+
+            std::vector<uint8_t> outgoing = session.ConsumeOutgoingBytes();
+            ASSERT_EQ(outgoing.empty(), true);
+        }
+
+        void ConsumeOutgoingBytes_TwoQueuedMessages_ReturnsConcatenatedBytes() {
+            NetSession session;
+
+            ASSERT_EQ(
+                session.QueueOutgoingMessage(MessageType::Ping, MakePayload({ 0x01, 0x02 })),
+                true
+            );
+            ASSERT_EQ(
+                session.QueueOutgoingMessage(MessageType::Pong, MakePayload({ 0x03 })),
+                true
+            );
+
+            std::vector<uint8_t> bytes = session.ConsumeOutgoingBytes();
+            ASSERT_EQ(bytes.empty(), false);
+
+            MessageType type1 = MessageType::Undefined;
+            MessageType type2 = MessageType::Undefined;
+            std::vector<uint8_t> payload1;
+            std::vector<uint8_t> payload2;
+            size_t read1 = 0;
+            size_t read2 = 0;
+
+            std::vector<uint8_t> remaining = bytes;
+
+            ASSERT_EQ(
+                ProtocolContract::TryDeserializeMessage(remaining, type1, payload1, read1),
+                ProtocolStatus::Success
+            );
+            ASSERT_EQ(type1, MessageType::Ping);
+            ASSERT_EQ(payload1 == MakePayload({ 0x01, 0x02 }), true);
+
+            remaining.erase(remaining.begin(), remaining.begin() + read1);
+
+            ASSERT_EQ(
+                ProtocolContract::TryDeserializeMessage(remaining, type2, payload2, read2),
+                ProtocolStatus::Success
+            );
+            ASSERT_EQ(type2, MessageType::Pong);
+            ASSERT_EQ(payload2 == MakePayload({ 0x03 }), true);
+
+            remaining.erase(remaining.begin(), remaining.begin() + read2);
+            ASSERT_EQ(remaining.empty(), true);
+        }
+
+    } // namespace NetSessionTests
 
 
     void RunAllTests() {
@@ -166,6 +461,21 @@ namespace Tests {
         RUN_TEST(ByteReaderWriter::ByteReader_ErrorsAndBounds);
         RUN_TEST(ByteReaderWriter::ByteWriter_Errors);
         std::cout << "ByteReaderWriter END\n\n";
+
+        //--------NetSession--------//
+
+        std::cout << "NetSession START\n";
+        RUN_TEST(NetSessionTests::QueueOutgoingMessage_BasicAndConsume);
+        RUN_TEST(NetSessionTests::PushReceivedBytes_FullMessage_ProducesIncomingMessage);
+        RUN_TEST(NetSessionTests::PushReceivedBytes_PartialMessage_WaitsUntilEnoughBytes);
+        RUN_TEST(NetSessionTests::PushReceivedBytes_TwoMessagesInSingleBuffer_DequeuesBothInOrder);
+        RUN_TEST(NetSessionTests::PushReceivedBytes_PartialValidMessage_DoesNotSetProtocolError);
+        RUN_TEST(NetSessionTests::PushReceivedBytes_InvalidBytes_SetsProtocolError);
+        RUN_TEST(NetSessionTests::QueueOutgoingMessage_InvalidType_ReturnsFalse_AndKeepsSessionOpen);
+        RUN_TEST(NetSessionTests::QueueOutgoingMessage_TooLargePayload_ReturnsFalse_AndKeepsSessionOpen);
+        RUN_TEST(NetSessionTests::ProtocolError_BlocksFurtherUsage);
+        RUN_TEST(NetSessionTests::ConsumeOutgoingBytes_TwoQueuedMessages_ReturnsConcatenatedBytes);
+        std::cout << "NetSession END\n\n";
 
         std::cout << "\nALL TESTS PASSED\n";
     }
