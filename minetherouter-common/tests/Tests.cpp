@@ -1,3 +1,5 @@
+#include "Tests.h"
+
 #include <iostream>
 #include <cstdlib>
 #include <cstdint>
@@ -6,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "Tests.h"
 #include <network/ByteReader.h>
 #include <network/ByteWriter.h>
 #include <network/NetSession.h>
@@ -19,6 +20,8 @@
 #include <network/messages/JoinRequest.h>
 #include <network/messages/JoinAccept.h>
 #include <network/messages/JoinReject.h>
+
+#include <network/MessageCodec.h>
 
 namespace Tests {
 
@@ -632,6 +635,201 @@ namespace Tests {
 
     } // namespace ProtocolMessages
 
+    namespace MessageCodecTests {
+
+        struct FailingEncodeMessage {
+        };
+
+        inline void Serialize(ByteWriter& w, const FailingEncodeMessage&)
+        {
+            w.writeBytes(nullptr, 1);
+        }
+
+        struct FailingDecodeMessage {
+        };
+
+        inline bool Deserialize(ByteReader&, FailingDecodeMessage&)
+        {
+            return false;
+        }
+
+        void EncodePayload_Ping_Success() {
+            Ping in;
+            in.sequence = 0x12345678u;
+
+            const std::vector<uint8_t> payload = EncodePayload(in);
+
+            ASSERT_EQ(payload.size(), static_cast<size_t>(4));
+            ASSERT_EQ(payload[0], static_cast<uint8_t>(0x78));
+            ASSERT_EQ(payload[1], static_cast<uint8_t>(0x56));
+            ASSERT_EQ(payload[2], static_cast<uint8_t>(0x34));
+            ASSERT_EQ(payload[3], static_cast<uint8_t>(0x12));
+        }
+
+        void EncodePayload_JoinRequest_Success() {
+            JoinRequest in;
+            in.protocolVersion = 7;
+            in.playerName = "lex";
+
+            const std::vector<uint8_t> payload = EncodePayload(in);
+
+            ASSERT_EQ(payload.empty(), false);
+
+            ByteReader r;
+            r.reset(payload.data(), payload.size());
+
+            JoinRequest out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(r.hasError(), false);
+            ASSERT_EQ(r.remaining(), static_cast<size_t>(0));
+            ASSERT_EQ(out.protocolVersion, in.protocolVersion);
+            ASSERT_EQ(out.playerName, in.playerName);
+        }
+
+        void EncodePayload_WhenSerializeSetsError_ReturnsEmptyVector() {
+            FailingEncodeMessage in;
+
+            const std::vector<uint8_t> payload = EncodePayload(in);
+
+            ASSERT_EQ(payload.empty(), true);
+        }
+
+        void DecodePayload_Ping_Success() {
+            Ping in;
+            in.sequence = 42u;
+
+            Message rawMessage;
+            rawMessage.type = MessageType::Ping;
+            rawMessage.payload = EncodePayload(in);
+
+            Ping out;
+            const bool ok = DecodePayload(rawMessage, MessageType::Ping, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(out.sequence, in.sequence);
+        }
+
+        void DecodePayload_WrongMessageType_ReturnsFalse() {
+            Ping in;
+            in.sequence = 111u;
+
+            Message rawMessage;
+            rawMessage.type = MessageType::Pong;
+            rawMessage.payload = EncodePayload(in);
+
+            Ping out;
+            out.sequence = 0u;
+
+            const bool ok = DecodePayload(rawMessage, MessageType::Ping, out);
+
+            ASSERT_EQ(ok, false);
+            ASSERT_EQ(out.sequence, static_cast<uint32_t>(0));
+        }
+
+        void DecodePayload_TruncatedPayload_ReturnsFalse() {
+            Message rawMessage;
+            rawMessage.type = MessageType::Ping;
+            rawMessage.payload = { 0x01, 0x02, 0x03 };
+
+            Ping out;
+            const bool ok = DecodePayload(rawMessage, MessageType::Ping, out);
+
+            ASSERT_EQ(ok, false);
+        }
+
+        void DecodePayload_TrailingBytes_ReturnsFalse() {
+            Ping in;
+            in.sequence = 77u;
+
+            Message rawMessage;
+            rawMessage.type = MessageType::Ping;
+            rawMessage.payload = EncodePayload(in);
+            rawMessage.payload.push_back(0xFF);
+
+            Ping out;
+            const bool ok = DecodePayload(rawMessage, MessageType::Ping, out);
+
+            ASSERT_EQ(ok, false);
+        }
+
+        void DecodePayload_WhenDeserializeReturnsFalse_ReturnsFalse() {
+            Message rawMessage;
+            rawMessage.type = MessageType::Ping;
+            rawMessage.payload = { 0xAA };
+
+            FailingDecodeMessage out;
+            const bool ok = DecodePayload(rawMessage, MessageType::Ping, out);
+
+            ASSERT_EQ(ok, false);
+        }
+
+    } // namespace MessageCodecTests
+
+
+    namespace HandshakeTest {
+        void Handshake_JoinRequest_Success_ReturnsJoinAccept() {
+            NetSession client;
+            NetSession server;
+
+            JoinRequest joinRequest;
+            joinRequest.protocolVersion = ProtocolContract::PROTOCOL_VERSION;
+            joinRequest.playerName = "lex";
+
+            const std::vector<uint8_t> requestPayload = EncodePayload(joinRequest);
+            ASSERT_EQ(requestPayload.empty(), false);
+
+            const bool queuedOnClient = client.QueueOutgoingMessage(MessageType::JoinRequest, requestPayload);
+            ASSERT_EQ(queuedOnClient, true);
+
+            const std::vector<uint8_t> clientBytes = client.ConsumeOutgoingBytes();
+            ASSERT_EQ(clientBytes.empty(), false);
+
+            server.PushReceivedBytes(clientBytes);
+
+            Message serverRawMessage;
+            const bool serverHasMessage = server.TryDequeueIncomingMessage(serverRawMessage);
+            ASSERT_EQ(serverHasMessage, true);
+            ASSERT_EQ(serverRawMessage.type, MessageType::JoinRequest);
+
+            JoinRequest decodedJoinRequest;
+            const bool serverDecodedRequest = DecodePayload(serverRawMessage, MessageType::JoinRequest, decodedJoinRequest);
+            ASSERT_EQ(serverDecodedRequest, true);
+            ASSERT_EQ(decodedJoinRequest.protocolVersion, ProtocolContract::PROTOCOL_VERSION);
+            ASSERT_EQ(decodedJoinRequest.playerName, "lex");
+
+            const bool shouldAccept =
+                decodedJoinRequest.protocolVersion == ProtocolContract::PROTOCOL_VERSION &&
+                !decodedJoinRequest.playerName.empty();
+
+            ASSERT_EQ(shouldAccept, true);
+
+            JoinAccept joinAccept;
+            joinAccept.clientId = 42u;
+
+            const std::vector<uint8_t> responsePayload = EncodePayload(joinAccept);
+            ASSERT_EQ(responsePayload.empty(), false);
+
+            const bool queuedOnServer = server.QueueOutgoingMessage(MessageType::JoinAccept, responsePayload);
+            ASSERT_EQ(queuedOnServer, true);
+
+            const std::vector<uint8_t> serverBytes = server.ConsumeOutgoingBytes();
+            ASSERT_EQ(serverBytes.empty(), false);
+
+            client.PushReceivedBytes(serverBytes);
+
+            Message clientRawMessage;
+            const bool clientHasMessage = client.TryDequeueIncomingMessage(clientRawMessage);
+            ASSERT_EQ(clientHasMessage, true);
+            ASSERT_EQ(clientRawMessage.type, MessageType::JoinAccept);
+
+            JoinAccept decodedJoinAccept;
+            const bool clientDecodedAccept = DecodePayload(clientRawMessage, MessageType::JoinAccept, decodedJoinAccept);
+            ASSERT_EQ(clientDecodedAccept, true);
+            ASSERT_EQ(decodedJoinAccept.clientId, static_cast<uint32_t>(42));
+        }
+    } // namespace HandshakeTest
 
     void RunAllTests() {
 
@@ -671,6 +869,25 @@ namespace Tests {
         RUN_TEST(ProtocolMessages::Ping_DeserializeFailsOnTruncatedData);
         RUN_TEST(ProtocolMessages::JoinRequest_DeserializeFailsOnTruncatedName);
         std::cout << "ProtocolMessages END\n\n";
+
+        //--------MessageCodec--------//
+
+        std::cout << "MessageCodec START\n";
+        RUN_TEST(MessageCodecTests::EncodePayload_Ping_Success);
+        RUN_TEST(MessageCodecTests::EncodePayload_JoinRequest_Success);
+        RUN_TEST(MessageCodecTests::EncodePayload_WhenSerializeSetsError_ReturnsEmptyVector);
+        RUN_TEST(MessageCodecTests::DecodePayload_Ping_Success);
+        RUN_TEST(MessageCodecTests::DecodePayload_WrongMessageType_ReturnsFalse);
+        RUN_TEST(MessageCodecTests::DecodePayload_TruncatedPayload_ReturnsFalse);
+        RUN_TEST(MessageCodecTests::DecodePayload_TrailingBytes_ReturnsFalse);
+        RUN_TEST(MessageCodecTests::DecodePayload_WhenDeserializeReturnsFalse_ReturnsFalse);
+        std::cout << "MessageCodec END\n\n";
+
+        //--------HandshakeTest--------//
+
+        std::cout << "HandshakeTest START\n";
+        RUN_TEST(HandshakeTest::Handshake_JoinRequest_Success_ReturnsJoinAccept);
+        std::cout << "HandshakeTest END\n\n";
 
         std::cout << "\nALL TESTS PASSED\n";
     }

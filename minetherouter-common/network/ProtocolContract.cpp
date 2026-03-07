@@ -7,7 +7,12 @@ ProtocolStatus ProtocolContract::SerializeMessage(std::vector<uint8_t>& bytesOut
 {
 	bytesOut.clear();
 
-	if(payload.size() > MAX_PAYLOAD_SIZE) {
+	const bool isCorrectType = messageType > MessageType::Undefined && messageType < MessageType::LAST;
+	if (!isCorrectType) {
+		return ProtocolStatus::BadHeader;
+	}
+
+	if (payload.size() > MAX_PAYLOAD_SIZE) {
 		return ProtocolStatus::TooLarge;
 	}
 
@@ -16,10 +21,16 @@ ProtocolStatus ProtocolContract::SerializeMessage(std::vector<uint8_t>& bytesOut
 	bytesOut.reserve(HEADER_SIZE + payload.size());
 
 	byteWriter.writeU16(static_cast<uint16_t>(messageType));
+	if (byteWriter.hasError()) {
+		return ProtocolStatus::Undefined;
+	}
 
 	const uint32_t payloadSize = static_cast<uint32_t>(payload.size());
 	byteWriter.writeU32(payloadSize);
 	byteWriter.writeBytes(payload.data(), payload.size());
+	if (byteWriter.hasError()) {
+		return ProtocolStatus::Undefined;
+	}
 
 	bytesOut.insert(bytesOut.end(), byteWriter.data(), byteWriter.data() + byteWriter.size());
 
