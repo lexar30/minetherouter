@@ -14,6 +14,12 @@
 #include <network/Message.h>
 #include <network/MessageType.h>
 
+#include <network/messages/Ping.h>
+#include <network/messages/Pong.h>
+#include <network/messages/JoinRequest.h>
+#include <network/messages/JoinAccept.h>
+#include <network/messages/JoinReject.h>
+
 namespace Tests {
 
     namespace ByteReaderWriter {
@@ -450,6 +456,182 @@ namespace Tests {
 
     } // namespace NetSessionTests
 
+    namespace ProtocolMessages {
+
+        void Ping_RoundTrip() {
+            Ping in;
+            in.sequence = 123456u;
+
+            ByteWriter w;
+            Serialize(w, in);
+
+            ASSERT_EQ(w.hasError(), false);
+            ASSERT_EQ(w.size() > 0, true);
+
+            ByteReader r;
+            r.reset(w.data(), w.size());
+
+            Ping out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(r.hasError(), false);
+            ASSERT_EQ(out.sequence, in.sequence);
+            ASSERT_EQ(r.remaining(), static_cast<size_t>(0));
+        }
+
+        void Pong_RoundTrip() {
+            Pong in;
+            in.sequence = 777u;
+
+            ByteWriter w;
+            Serialize(w, in);
+
+            ASSERT_EQ(w.hasError(), false);
+            ASSERT_EQ(w.size() > 0, true);
+
+            ByteReader r;
+            r.reset(w.data(), w.size());
+
+            Pong out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(r.hasError(), false);
+            ASSERT_EQ(out.sequence, in.sequence);
+            ASSERT_EQ(r.remaining(), static_cast<size_t>(0));
+        }
+
+        void JoinRequest_RoundTrip() {
+            JoinRequest in;
+            in.protocolVersion = 1;
+            in.playerName = "lexar";
+
+            ByteWriter w;
+            Serialize(w, in);
+
+            ASSERT_EQ(w.hasError(), false);
+            ASSERT_EQ(w.size() > 0, true);
+
+            ByteReader r;
+            r.reset(w.data(), w.size());
+
+            JoinRequest out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(r.hasError(), false);
+            ASSERT_EQ(out.protocolVersion, in.protocolVersion);
+            ASSERT_EQ(out.playerName, in.playerName);
+            ASSERT_EQ(r.remaining(), static_cast<size_t>(0));
+        }
+
+        void JoinRequest_EmptyName_RoundTrip() {
+            JoinRequest in;
+            in.protocolVersion = 1;
+            in.playerName = "";
+
+            ByteWriter w;
+            Serialize(w, in);
+
+            ASSERT_EQ(w.hasError(), false);
+
+            ByteReader r;
+            r.reset(w.data(), w.size());
+
+            JoinRequest out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(r.hasError(), false);
+            ASSERT_EQ(out.protocolVersion, in.protocolVersion);
+            ASSERT_EQ(out.playerName, in.playerName);
+            ASSERT_EQ(r.remaining(), static_cast<size_t>(0));
+        }
+
+        void JoinAccept_RoundTrip() {
+            JoinAccept in;
+            in.clientId = 42u;
+
+            ByteWriter w;
+            Serialize(w, in);
+
+            ASSERT_EQ(w.hasError(), false);
+            ASSERT_EQ(w.size() > 0, true);
+
+            ByteReader r;
+            r.reset(w.data(), w.size());
+
+            JoinAccept out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(r.hasError(), false);
+            ASSERT_EQ(out.clientId, in.clientId);
+            ASSERT_EQ(r.remaining(), static_cast<size_t>(0));
+        }
+
+        void JoinReject_RoundTrip() {
+            JoinReject in;
+            in.reasonCode = 2u;
+
+            ByteWriter w;
+            Serialize(w, in);
+
+            ASSERT_EQ(w.hasError(), false);
+            ASSERT_EQ(w.size() > 0, true);
+
+            ByteReader r;
+            r.reset(w.data(), w.size());
+
+            JoinReject out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, true);
+            ASSERT_EQ(r.hasError(), false);
+            ASSERT_EQ(out.reasonCode, in.reasonCode);
+            ASSERT_EQ(r.remaining(), static_cast<size_t>(0));
+        }
+
+        void Ping_DeserializeFailsOnTruncatedData() {
+            Ping in;
+            in.sequence = 999u;
+
+            ByteWriter w;
+            Serialize(w, in);
+            ASSERT_EQ(w.hasError(), false);
+            ASSERT_EQ(w.size() > 0, true);
+
+            ByteReader r;
+            r.reset(w.data(), w.size() - 1);
+
+            Ping out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, false);
+            ASSERT_EQ(r.hasError(), true);
+        }
+
+        void JoinRequest_DeserializeFailsOnTruncatedName() {
+            ByteWriter w;
+            w.writeU16(1);   // protocolVersion
+            w.writeU32(5);   // string length
+            w.writeBytes(reinterpret_cast<const uint8_t*>("abc"), 3); // truncated string bytes
+
+            ASSERT_EQ(w.hasError(), false);
+
+            ByteReader r;
+            r.reset(w.data(), w.size());
+
+            JoinRequest out;
+            const bool ok = Deserialize(r, out);
+
+            ASSERT_EQ(ok, false);
+            ASSERT_EQ(r.hasError(), true);
+        }
+
+    } // namespace ProtocolMessages
+
 
     void RunAllTests() {
 
@@ -476,6 +658,19 @@ namespace Tests {
         RUN_TEST(NetSessionTests::ProtocolError_BlocksFurtherUsage);
         RUN_TEST(NetSessionTests::ConsumeOutgoingBytes_TwoQueuedMessages_ReturnsConcatenatedBytes);
         std::cout << "NetSession END\n\n";
+
+        //--------ProtocolMessages--------//
+
+        std::cout << "ProtocolMessages START\n";
+        RUN_TEST(ProtocolMessages::Ping_RoundTrip);
+        RUN_TEST(ProtocolMessages::Pong_RoundTrip);
+        RUN_TEST(ProtocolMessages::JoinRequest_RoundTrip);
+        RUN_TEST(ProtocolMessages::JoinRequest_EmptyName_RoundTrip);
+        RUN_TEST(ProtocolMessages::JoinAccept_RoundTrip);
+        RUN_TEST(ProtocolMessages::JoinReject_RoundTrip);
+        RUN_TEST(ProtocolMessages::Ping_DeserializeFailsOnTruncatedData);
+        RUN_TEST(ProtocolMessages::JoinRequest_DeserializeFailsOnTruncatedName);
+        std::cout << "ProtocolMessages END\n\n";
 
         std::cout << "\nALL TESTS PASSED\n";
     }
