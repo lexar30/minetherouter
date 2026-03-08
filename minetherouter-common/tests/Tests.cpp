@@ -768,7 +768,7 @@ namespace Tests {
     } // namespace MessageCodecTests
 
 
-    namespace HandshakeTest {
+    namespace HandshakeTests {
         void Handshake_JoinRequest_Success_ReturnsJoinAccept() {
             NetSession client;
             NetSession server;
@@ -829,6 +829,130 @@ namespace Tests {
             ASSERT_EQ(clientDecodedAccept, true);
             ASSERT_EQ(decodedJoinAccept.clientId, static_cast<uint32_t>(42));
         }
+
+        void Handshake_BadProtocol_ReturnsJoinReject() {
+            NetSession client;
+            NetSession server;
+
+            JoinRequest joinRequest;
+			constexpr uint8_t INVALID_PROTOCOL_VERSION = ProtocolContract::PROTOCOL_VERSION + 1;
+            joinRequest.protocolVersion = INVALID_PROTOCOL_VERSION;
+            joinRequest.playerName = "lex";
+
+            const std::vector<uint8_t> requestPayload = EncodePayload(joinRequest);
+            ASSERT_EQ(requestPayload.empty(), false);
+
+            const bool queuedOnClient = client.QueueOutgoingMessage(MessageType::JoinRequest, requestPayload);
+            ASSERT_EQ(queuedOnClient, true);
+
+            const std::vector<uint8_t> clientBytes = client.ConsumeOutgoingBytes();
+            ASSERT_EQ(clientBytes.empty(), false);
+
+            server.PushReceivedBytes(clientBytes);
+
+            Message serverRawMessage;
+            const bool serverHasMessage = server.TryDequeueIncomingMessage(serverRawMessage);
+            ASSERT_EQ(serverHasMessage, true);
+            ASSERT_EQ(serverRawMessage.type, MessageType::JoinRequest);
+
+            JoinRequest decodedJoinRequest;
+            const bool serverDecodedRequest = DecodePayload(serverRawMessage, MessageType::JoinRequest, decodedJoinRequest);
+            ASSERT_EQ(serverDecodedRequest, true);
+            ASSERT_EQ(decodedJoinRequest.protocolVersion, INVALID_PROTOCOL_VERSION);
+            ASSERT_EQ(decodedJoinRequest.playerName, "lex");
+
+            const bool shouldReject =
+                decodedJoinRequest.protocolVersion != ProtocolContract::PROTOCOL_VERSION &&
+                !decodedJoinRequest.playerName.empty();
+
+            ASSERT_EQ(shouldReject, true);
+
+            JoinReject joinReject;
+			joinReject.reasonCode = static_cast<uint8_t>(JoinRejectReason::BAD_PROTOCOL_VERSION);
+
+            const std::vector<uint8_t> responsePayload = EncodePayload(joinReject);
+            ASSERT_EQ(responsePayload.empty(), false);
+
+            const bool queuedOnServer = server.QueueOutgoingMessage(MessageType::JoinReject, responsePayload);
+            ASSERT_EQ(queuedOnServer, true);
+
+            const std::vector<uint8_t> serverBytes = server.ConsumeOutgoingBytes();
+            ASSERT_EQ(serverBytes.empty(), false);
+
+            client.PushReceivedBytes(serverBytes);
+
+            Message clientRawMessage;
+            const bool clientHasMessage = client.TryDequeueIncomingMessage(clientRawMessage);
+            ASSERT_EQ(clientHasMessage, true);
+            ASSERT_EQ(clientRawMessage.type, MessageType::JoinReject);
+
+            JoinReject decodedJoinReject;
+            const bool clientDecodedReject = DecodePayload(clientRawMessage, MessageType::JoinReject, decodedJoinReject);
+            ASSERT_EQ(clientDecodedReject, true);
+            ASSERT_EQ(decodedJoinReject.reasonCode, static_cast<uint8_t>(JoinRejectReason::BAD_PROTOCOL_VERSION));
+        }
+
+        void Handshake_EmptyPlayerName_ReturnsJoinReject() {
+            NetSession client;
+            NetSession server;
+
+            JoinRequest joinRequest;
+            joinRequest.protocolVersion = ProtocolContract::PROTOCOL_VERSION;
+            joinRequest.playerName = "";
+
+            const std::vector<uint8_t> requestPayload = EncodePayload(joinRequest);
+            ASSERT_EQ(requestPayload.empty(), false);
+
+            const bool queuedOnClient = client.QueueOutgoingMessage(MessageType::JoinRequest, requestPayload);
+            ASSERT_EQ(queuedOnClient, true);
+
+            const std::vector<uint8_t> clientBytes = client.ConsumeOutgoingBytes();
+            ASSERT_EQ(clientBytes.empty(), false);
+
+            server.PushReceivedBytes(clientBytes);
+
+            Message serverRawMessage;
+            const bool serverHasMessage = server.TryDequeueIncomingMessage(serverRawMessage);
+            ASSERT_EQ(serverHasMessage, true);
+            ASSERT_EQ(serverRawMessage.type, MessageType::JoinRequest);
+
+            JoinRequest decodedJoinRequest;
+            const bool serverDecodedRequest = DecodePayload(serverRawMessage, MessageType::JoinRequest, decodedJoinRequest);
+            ASSERT_EQ(serverDecodedRequest, true);
+            ASSERT_EQ(decodedJoinRequest.protocolVersion, ProtocolContract::PROTOCOL_VERSION);
+            ASSERT_EQ(decodedJoinRequest.playerName.empty(), true);
+
+            const bool shouldReject =
+                decodedJoinRequest.protocolVersion == ProtocolContract::PROTOCOL_VERSION &&
+                decodedJoinRequest.playerName.empty();
+
+            ASSERT_EQ(shouldReject, true);
+
+            JoinReject joinReject;
+			joinReject.reasonCode = static_cast<uint8_t>(JoinRejectReason::EMPTY_PLAYER_NAME);
+
+            const std::vector<uint8_t> responsePayload = EncodePayload(joinReject);
+            ASSERT_EQ(responsePayload.empty(), false);
+
+            const bool queuedOnServer = server.QueueOutgoingMessage(MessageType::JoinReject, responsePayload);
+            ASSERT_EQ(queuedOnServer, true);
+
+            const std::vector<uint8_t> serverBytes = server.ConsumeOutgoingBytes();
+            ASSERT_EQ(serverBytes.empty(), false);
+
+            client.PushReceivedBytes(serverBytes);
+
+            Message clientRawMessage;
+            const bool clientHasMessage = client.TryDequeueIncomingMessage(clientRawMessage);
+            ASSERT_EQ(clientHasMessage, true);
+            ASSERT_EQ(clientRawMessage.type, MessageType::JoinReject);
+
+            JoinReject decodedJoinReject;
+            const bool clientDecodedReject = DecodePayload(clientRawMessage, MessageType::JoinReject, decodedJoinReject);
+            ASSERT_EQ(clientDecodedReject, true);
+            ASSERT_EQ(decodedJoinReject.reasonCode, static_cast<uint8_t>(JoinRejectReason::EMPTY_PLAYER_NAME));
+        }
+
     } // namespace HandshakeTest
 
     void RunAllTests() {
@@ -886,7 +1010,9 @@ namespace Tests {
         //--------HandshakeTest--------//
 
         std::cout << "HandshakeTest START\n";
-        RUN_TEST(HandshakeTest::Handshake_JoinRequest_Success_ReturnsJoinAccept);
+        RUN_TEST(HandshakeTests::Handshake_JoinRequest_Success_ReturnsJoinAccept);
+        RUN_TEST(HandshakeTests::Handshake_BadProtocol_ReturnsJoinReject);
+        RUN_TEST(HandshakeTests::Handshake_EmptyPlayerName_ReturnsJoinReject);
         std::cout << "HandshakeTest END\n\n";
 
         std::cout << "\nALL TESTS PASSED\n";
