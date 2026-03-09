@@ -1,11 +1,14 @@
 #pragma once
 
-class MessageHandler
-{
-public:
+#include "MessageHandler.h"
+
+namespace mtr::network {
+	class MessageHandler
+	{
+	public:
 
 
-private:
+	private:
 
-};
-
+	};
+}

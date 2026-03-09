@@ -1,19 +1,23 @@
 #pragma once
 
 #include <cstdint>
+#include <network/ByteReader.h>
+#include <network/ByteWriter.h>
 
-struct Pong
-{
-    uint32_t sequence = 0;
-};
+namespace mtr::network::messages {
+    struct Pong
+    {
+        uint32_t sequence = 0;
+    };
 
-inline void Serialize(ByteWriter& w, const Pong& msg)
-{
-    w.writeU32(msg.sequence);
-}
+    inline void Serialize(mtr::network::core::ByteWriter& w, const Pong& msg)
+    {
+        w.writeU32(msg.sequence);
+    }
 
-inline bool Deserialize(ByteReader& r, Pong& outMsg)
-{
-    outMsg.sequence = r.readU32();
-    return !r.hasError();
+    inline bool Deserialize(mtr::network::core::ByteReader& r, Pong& outMsg)
+    {
+        outMsg.sequence = r.readU32();
+        return !r.hasError();
+    }
 }

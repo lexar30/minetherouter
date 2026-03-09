@@ -3,36 +3,38 @@
 #include <vector>
 #include <cstdint>
 
-#include <network/ByteWriter.h>
-#include <network/ByteReader.h>
-#include <network/Message.h>
-#include <network/MessageType.h>
+#include "ByteWriter.h"
+#include "ByteReader.h"
+#include "Message.h"
+#include "MessageType.h"
 
-template<typename T>
-std::vector<uint8_t> EncodePayload(const T& data) {
-    ByteWriter w;
-    Serialize(w, data);
+namespace mtr::network {
+    template<typename T>
+    std::vector<uint8_t> EncodePayload(const T& data) {
+        mtr::network::core::ByteWriter w;
+        Serialize(w, data);
 
-    if (w.hasError()) {
-        return {};
+        if (w.hasError()) {
+            return {};
+        }
+
+        return std::vector<uint8_t>(w.data(), w.data() + w.size());
     }
 
-    return std::vector<uint8_t>(w.data(), w.data() + w.size());
-}
+    template<typename T>
+    bool DecodePayload(const Message& rawMessage, MessageType expectedType, T& outData)
+    {
+        if (rawMessage.type != expectedType) {
+            return false;
+        }
 
-template<typename T>
-bool DecodePayload(const Message& rawMessage, MessageType expectedType, T& outData)
-{
-    if (rawMessage.type != expectedType) {
-        return false;
+        mtr::network::core::ByteReader r;
+        r.reset(rawMessage.payload.data(), rawMessage.payload.size());
+
+        if (!Deserialize(r, outData)) {
+            return false;
+        }
+
+        return r.remaining() == 0 && !r.hasError();
     }
-
-    ByteReader r;
-    r.reset(rawMessage.payload.data(), rawMessage.payload.size());
-
-    if (!Deserialize(r, outData)) {
-        return false;
-    }
-
-    return r.remaining() == 0 && !r.hasError();
 }

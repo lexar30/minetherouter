@@ -3,9 +3,11 @@
 #include <cstdint>
 #include <vector>
 
-#include <network/MessageType.h>
+#include "MessageType.h"
 
-struct Message {
-	MessageType type = MessageType::Undefined;
-	std::vector<uint8_t> payload;
-};
+namespace mtr::network {
+	struct Message {
+		MessageType type;
+		std::vector<uint8_t> payload;
+	};
+}

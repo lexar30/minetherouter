@@ -2,18 +2,23 @@
 
 #include <cstdint>
 
-struct JoinAccept
-{
-    uint32_t clientId = 0;
-};
+#include <network/ByteReader.h>
+#include <network/ByteWriter.h>
 
-inline void Serialize(ByteWriter& w, const JoinAccept& msg)
-{
-    w.writeU32(msg.clientId);
-}
+namespace mtr::network::messages {
+    struct JoinAccept
+    {
+        uint32_t clientId = 0;
+    };
 
-inline bool Deserialize(ByteReader& r, JoinAccept& outMsg)
-{
-    outMsg.clientId = r.readU32();
-    return !r.hasError();
+    inline void Serialize(mtr::network::core::ByteWriter& w, const JoinAccept& msg)
+    {
+        w.writeU32(msg.clientId);
+    }
+
+    inline bool Deserialize(mtr::network::core::ByteReader& r, JoinAccept& outMsg)
+    {
+        outMsg.clientId = r.readU32();
+        return !r.hasError();
+    }
 }
