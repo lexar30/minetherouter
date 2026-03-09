@@ -34,6 +34,9 @@ add_library(minetherouter-common-lib STATIC
 	minetherouter-common/network/messages/JoinRequest.h
 	minetherouter-common/network/messages/Ping.h
 	minetherouter-common/network/messages/Pong.h	
+	
+	# headers utils
+	minetherouter-common/utils/Logger.h	
 )
 
 target_include_directories(minetherouter-common-lib
