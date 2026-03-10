@@ -1,87 +1,147 @@
 # MineTheRouter (MVP)
 
-Минимальный клиент-серверный прототип Minecraft-like игры с авторитетным сервером и собственным бинарным сетевым протоколом.
+Minimal client-server Minecraft-like prototype with an authoritative server and a custom binary network protocol.
 
-Проект разрабатывается с нуля без использования готовых сетевых движков или игровых фреймворков. Основная цель — построение чистой и контролируемой сетевой архитектуры: сервер-авторитетная логика, кастомная сериализация, детерминированный обмен сообщениями.
+The project is implemented from scratch without using existing networking engines or game frameworks.  
+The main goal is to build a clear and controllable networking architecture with server-authoritative logic and a custom message protocol.
 
-Текущий фокус разработки — инфраструктура:
-- бинарная сериализация
-- протокол сообщений
+Current development focus is on infrastructure:
+
+- binary serialization
+- message protocol
 - TCP message framing
-- базовый handshake (Join / Ping)
-- фундамент для серверной симуляции мира
+- basic handshake (Join / Ping)
+- foundation for server world simulation
 
 
 ## Overview
 
-Архитектура проекта:
-- Авторитетный сервер (вся игровая логика на сервере)
-- Тонкий клиент (ввод, отображение, сеть)
-- Собственный бинарный протокол поверх TCP
-- Общий модуль для протокола и сериализации
+Project architecture:
 
-Проект задуман как упрощённый Minecraft-like:
-- передвижение
-- установка/разрушение блоков
-- базовая симуляция
-- стриминг состояния мира (позже)
+- **Authoritative server** — all game logic runs on the server
+- **Thin client** — input, rendering and networking
+- **Custom binary protocol over TCP**
+- **Shared protocol module** used by both client and server
 
-Античит и оптимизации пока не являются приоритетом (MVP стадия).
+The project is intentionally kept relatively simple.  
+In some places more straightforward implementations are preferred over complex abstractions to keep the networking logic explicit and easy to reason about.
 
 
 ## Project Structure
 
 Solution: `minetherouter.sln`
 
-Проекты:
-- `minetherouter-client` — игровой клиент (сеть, ввод, рендер)
-- `minetherouter-server` — авторитетный сервер (логика, мир, симуляция)
-- `minetherouter-common` — общий код (протокол, сериализация, типы сообщений)
+Projects:
 
-### Назначение common модуля
-- ByteWriter / ByteReader (бинарная сериализация)
-- MessageType
-- сетевой протокол
-- общие структуры данных
+- `minetherouter-client` — game client (networking, input, rendering)
+- `minetherouter-server` — authoritative server (game logic, world simulation)
+- `minetherouter-common` — shared code (protocol, serialization, message types)
+
+### Common module responsibilities
+
+- ByteWriter / ByteReader (binary serialization)
+- message definitions
+- protocol contract
+- shared network structures
 
 
 ## Tech Stack
 
-- Language: C++20
-- IDE: Visual Studio (MSVS)
-- Networking: TCP sockets (custom implementation)
-- Platform (current): Windows
-- Target (future): Linux dedicated server + Windows client
-- Serialization: Custom binary protocol (little-endian)
+- Language: **C++20**
+- Build system: **CMake**
+- IDE: **Visual Studio 2022**
+- Networking: **custom TCP implementation**
+- Platform (current): **Windows**
+- Target (future): **Linux dedicated server + Windows client**
+- Serialization: **custom little-endian binary protocol**
+
+
+## Build
+
+The project is built using **CMake**.
+
+Helper scripts are provided:
+
+
+build_debug.bat
+build_release.bat
+
+
+They perform:
+
+1. CMake project generation
+2. Visual Studio solution generation
+3. project build
+4. placing binaries into the `build` directory
+
+After build the following binaries are available:
+
+minetherouter-tests.exe
+minetherouter-server.exe
+minetherouter-client.exe
+
+
+
+## Tests
+
+Unit tests are located in the `minetherouter-common` module.
+
+After building the project run:
+build/bin/minetherouter-tests.exe
+
+
+Tests cover:
+
+- binary serialization
+- message framing
+- protocol message parsing
+- handshake logic
 
 
 ## Network Protocol (MVP)
 
-Проект использует собственный бинарный протокол поверх TCP.
+The project uses a custom binary protocol over TCP.
 
 ### Endianness
-Все числовые типы сериализуются в little-endian формате:
-- u16, u32, i32, f32 — младший байт первым
 
-### Общий формат сообщения
+All numeric types are serialized in **little-endian** format.
 
-Каждое сетевое сообщение имеет фиксированный заголовок:
+Examples:
 
-| Поле        | Тип | Размер |
-|-------------|-----|--------|
-| MessageType | u16 | 2 байта |
-| PayloadSize | u32 | 4 байта |
-| Payload     | N   | N байт |
+- `u16`
+- `u32`
+- `i32`
+- `f32`
 
-Размер заголовка: 6 байт.
+Least significant byte goes first.
 
-Это необходимо, потому что TCP является потоковым протоколом и не сохраняет границы сообщений.
+
+### Message Format
+
+Each network message contains a fixed-size header:
+
+| Field        | Type | Size |
+|--------------|------|------|
+| MessageType  | u16  | 2 bytes |
+| PayloadSize  | u32  | 4 bytes |
+| Payload      | N    | N bytes |
+
+Header size: **6 bytes**
+
+This is required because **TCP is a streaming protocol and does not preserve message boundaries**.
+
 
 ## Networking (planned)
 
-- Network I/O переносится в отдельный поток с thread-safe очередями (incoming/outgoing)
+- network I/O in a separate thread
+- thread-safe queues for incoming / outgoing messages
+- clear separation between networking layer and simulation
 
 
-## Networking (in future)
+## Possible Extensions
 
-- Планируется поддержка переключаемого транспорта: TCP / UDP
+Potential future improvements:
+
+- alternative transport support (TCP / UDP)
+- world state streaming
+- message compression / optimization
