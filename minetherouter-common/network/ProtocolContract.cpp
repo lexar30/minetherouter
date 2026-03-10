@@ -3,7 +3,7 @@
 #include "ByteReader.h"
 #include "ByteWriter.h"
 
-namespace mtr::network {
+namespace mtr::common::network {
 	ProtocolStatus ProtocolContract::SerializeMessage(std::vector<uint8_t>& bytesOut, MessageType messageType, const std::vector<uint8_t>& payload)
 	{
 		bytesOut.clear();
@@ -17,7 +17,7 @@ namespace mtr::network {
 			return ProtocolStatus::TooLarge;
 		}
 
-		mtr::network::core::ByteWriter byteWriter;
+		mtr::common::network::core::ByteWriter byteWriter;
 
 		bytesOut.reserve(HEADER_SIZE + payload.size());
 
@@ -44,7 +44,7 @@ namespace mtr::network {
 		outPayload.clear();
 		outMessageType = MessageType::Undefined;
 
-		mtr::network::core::ByteReader byteReader;
+		mtr::common::network::core::ByteReader byteReader;
 		byteReader.reset(bytes.data(), bytes.size());
 
 		if (byteReader.remaining() < HEADER_SIZE) {

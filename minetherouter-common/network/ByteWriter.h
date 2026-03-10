@@ -5,7 +5,7 @@
 #include <string_view>
 #include <bit>
 
-namespace mtr::network::core {
+namespace mtr::common::network::core {
 	class ByteWriter {
 	public:
 		ByteWriter() {

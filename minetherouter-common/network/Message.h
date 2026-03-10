@@ -5,7 +5,7 @@
 
 #include "MessageType.h"
 
-namespace mtr::network {
+namespace mtr::common::network {
 	struct Message {
 		MessageType type;
 		std::vector<uint8_t> payload;

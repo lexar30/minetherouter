@@ -7,7 +7,7 @@
 #include "Message.h"
 #include "MessageType.h"
 
-namespace mtr::network {
+namespace mtr::common::network {
 	class NetSession
 	{
 	public:

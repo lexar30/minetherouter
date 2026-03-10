@@ -1,7 +1,7 @@
 #include "NetSession.h"
 #include "ProtocolContract.h"
 
-namespace mtr::network {
+namespace mtr::common::network {
 	void NetSession::PushReceivedBytes(std::span<const uint8_t> bytes)
 	{
 		if (bytes.empty()) {

@@ -6,7 +6,7 @@
 #include <bit>
 #include <string>
 
-namespace mtr::network::core {
+namespace mtr::common::network::core {
 	class ByteReader {
 	public:
 		bool hasError() const {

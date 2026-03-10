@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace mtr::network {
+namespace mtr::common::network {
 	enum class ProtocolStatus {
 		Undefined = 0,
 		Success = 1,

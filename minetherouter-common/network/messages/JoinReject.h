@@ -5,7 +5,7 @@
 #include <network/ByteReader.h>
 #include <network/ByteWriter.h>
 
-namespace mtr::network::messages {
+namespace mtr::common::network::messages {
     enum class JoinRejectReason : uint8_t {
         UNDEFINED = 0,
         BAD_PROTOCOL_VERSION = 1,
@@ -17,12 +17,12 @@ namespace mtr::network::messages {
         uint16_t reasonCode = 0;
     };
 
-    inline void Serialize(mtr::network::core::ByteWriter& w, const JoinReject& msg)
+    inline void Serialize(mtr::common::network::core::ByteWriter& w, const JoinReject& msg)
     {
         w.writeU16(msg.reasonCode);
     }
 
-    inline bool Deserialize(mtr::network::core::ByteReader& r, JoinReject& outMsg)
+    inline bool Deserialize(mtr::common::network::core::ByteReader& r, JoinReject& outMsg)
     {
         outMsg.reasonCode = r.readU16();
         return !r.hasError();

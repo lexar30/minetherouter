@@ -8,10 +8,10 @@
 #include "Message.h"
 #include "MessageType.h"
 
-namespace mtr::network {
+namespace mtr::common::network {
     template<typename T>
     std::vector<uint8_t> EncodePayload(const T& data) {
-        mtr::network::core::ByteWriter w;
+        mtr::common::network::core::ByteWriter w;
         Serialize(w, data);
 
         if (w.hasError()) {
@@ -28,7 +28,7 @@ namespace mtr::network {
             return false;
         }
 
-        mtr::network::core::ByteReader r;
+        mtr::common::network::core::ByteReader r;
         r.reset(rawMessage.payload.data(), rawMessage.payload.size());
 
         if (!Deserialize(r, outData)) {

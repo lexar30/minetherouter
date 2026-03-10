@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace mtr::network {
+namespace mtr::common::network {
 	enum class MessageType : uint16_t {
 		Undefined = 0,
 		Ping = 1,

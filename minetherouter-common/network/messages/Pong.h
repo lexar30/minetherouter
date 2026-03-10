@@ -4,18 +4,18 @@
 #include <network/ByteReader.h>
 #include <network/ByteWriter.h>
 
-namespace mtr::network::messages {
+namespace mtr::common::network::messages {
     struct Pong
     {
         uint32_t sequence = 0;
     };
 
-    inline void Serialize(mtr::network::core::ByteWriter& w, const Pong& msg)
+    inline void Serialize(mtr::common::network::core::ByteWriter& w, const Pong& msg)
     {
         w.writeU32(msg.sequence);
     }
 
-    inline bool Deserialize(mtr::network::core::ByteReader& r, Pong& outMsg)
+    inline bool Deserialize(mtr::common::network::core::ByteReader& r, Pong& outMsg)
     {
         outMsg.sequence = r.readU32();
         return !r.hasError();

@@ -13,12 +13,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # common-lib
 add_library(minetherouter-common-lib STATIC
 	# src network 
-	minetherouter-common/network/MessageHandler.cpp
 	minetherouter-common/network/NetSession.cpp
 	minetherouter-common/network/ProtocolContract.cpp
 	
 	# headers network / core
-	minetherouter-common/network/MessageHandler.h
 	minetherouter-common/network/NetSession.h
 	minetherouter-common/network/ProtocolContract.h
 	
@@ -68,7 +66,16 @@ target_link_libraries(minetherouter-client
 
 # server
 add_executable(minetherouter-server
+	# src
 	minetherouter-server/main.cpp
+	minetherouter-server/Server.cpp
+	minetherouter-server/NetworkSession.cpp
+	minetherouter-server/MessageHandler.cpp
+	
+	# headers
+	minetherouter-server/Server.h
+	minetherouter-server/NetworkSession.h
+	minetherouter-server/MessageHandler.h
 )
 
 target_link_libraries(minetherouter-server

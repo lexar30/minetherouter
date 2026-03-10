@@ -23,9 +23,9 @@
 
 #include <network/MessageCodec.h>
 
-using namespace mtr::network;
-using namespace mtr::network::core;
-using namespace mtr::network::messages;
+using namespace mtr::common::network;
+using namespace mtr::common::network::core;
+using namespace mtr::common::network::messages;
 
 namespace Tests {
 
